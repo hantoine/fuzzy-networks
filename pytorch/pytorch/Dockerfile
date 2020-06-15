@@ -22,30 +22,29 @@ RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest
      /opt/conda/bin/conda clean -ya
 ENV PATH /opt/conda/bin:$PATH
 
-WORKDIR /opt
-RUN git clone https://github.com/pytorch/pytorch
-
-WORKDIR pytorch
-RUN git submodule sync && git submodule update --init --recursive
 
 ENV BLAS=OpenBLAS \
     USE_CUDA=OFF \
-#    USE_FAKELOWP=OFF \
-#    USE_FBGEMM=OFF \
-#    USE_OPENMP=OFF \
-#    USE_NUMA=OFF \
-#    USE_MPI=OFF \
-#    USE_NCCL=OFF \
-    USE_METAL=OFF
+    USE_NUMA=OFF \
+    USE_MPI=OFF \
+    USE_NCCL=OFF \
+    USE_METAL=OFF \
+    USE_FAKELOWP=OFF \
+    USE_FBGEMM=OFF
 
-# Fix non-relevant warning message about disabling fakelowp when already disabled
-COPY Dependencies.cmake.patch cmake/
-RUN cd cmake && patch < Dependencies.cmake.patch 
 
+WORKDIR /opt
+# Patch fixing non-relevant warning message about disabling fakelowp when already disabled
+COPY Dependencies.cmake.patch .
 # Environement variables CC, CXX, LD and LDSHARED are unset to stop using verificarlo to compile Pytorch
-RUN TORCH_CUDA_ARCH_LIST="3.5 5.2 6.0 6.1 7.0+PTX" TORCH_NVCC_FLAGS="-Xfatbin -compress-all" \
+RUN git clone https://github.com/pytorch/pytorch && \
+    cd pytorch && git submodule sync && git submodule update --init --recursive && \
+    cd cmake && patch < ../../Dependencies.cmake.patch && cd .. \
+    TORCH_CUDA_ARCH_LIST="3.5 5.2 6.0 6.1 7.0+PTX" TORCH_NVCC_FLAGS="-Xfatbin -compress-all" \
     CMAKE_PREFIX_PATH="$(dirname $(which conda))/../" \
     unset CC CXX LD LDSHARED && \
     python setup.py install && \
-    pip install -v .
+    pip install -v . && \
+    rm -rf /opt/pytorch /opt/Dependencies.cmake.patch
+
 WORKDIR /workdir
