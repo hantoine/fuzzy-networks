@@ -5,9 +5,9 @@ RUN apt-get update &&\
     rm -rf /var/lib/apt/lists/ &&\
     mkdir -p /opt/build
 
-ENV CC="verificarlo" \
-    CXX="verificarlo" \
-    FC="verificarlo" \
+ENV CC="verificarlo-c" \
+    CXX="verificarlo-c++" \
+    FC="verificarlo-f" \
     LD="verificarlo" \
     LDSHARED="verificarlo -shared" \
     HOSTCC="gcc"
