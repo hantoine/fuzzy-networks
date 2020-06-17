@@ -5,17 +5,12 @@ RUN apt-get update &&\
     rm -rf /var/lib/apt/lists/ &&\
     mkdir -p /opt/build
 
-# ENV CC="verificarlo" \
-#     CXX="verificarlo" \
-#     FC="verificarlo" \
-#     LD="verificarlo" \
-#     LDSHARED="verificarlo -shared" \
-#     HOSTCC="gcc"
-
-ENV PATH="$PATH:/usr/lib/llvm-7/bin" \
-    CC="clang" \
-    CXX="clang++" \
-    FC="flang"
+ENV CC="verificarlo" \
+    CXX="verificarlo" \
+    FC="verificarlo" \
+    LD="verificarlo" \
+    LDSHARED="verificarlo -shared" \
+    HOSTCC="gcc"
 
 RUN cd /opt/build/ &&\
     wget --quiet https://github.com/xianyi/OpenBLAS/archive/v0.3.9.tar.gz &&\
