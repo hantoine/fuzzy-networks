@@ -14,10 +14,13 @@ ENV CC="verificarlo-c" \
     VFC_BACKENDS="libinterflop_ieee.so" \
     MAKE_NB_JOBS="1"
 
+COPY f_check.patch /opt/build/
+
 RUN cd /opt/build/ &&\
     wget --quiet https://github.com/xianyi/OpenBLAS/archive/v${OPENBLAS_VERSION}.tar.gz &&\
     tar xf v${OPENBLAS_VERSION}.tar.gz &&\
     cd /opt/build/OpenBLAS-${OPENBLAS_VERSION}/ &&\
+    patch < /opt/build/f_check.patch &&\
     make &&\
     make install PREFIX=/usr/local &&\
     cd / && rm -rf /opt/build &&\
