@@ -324,9 +324,67 @@ function build() {
 
     echo ${COMMAND} > ./command.sh && unbuffer bash ./command.sh | ts
 
-    # Push intermediate Docker image for next phase to use
+    # Commit built Docker image
     COMMIT_DOCKER_IMAGE=${DOCKER_IMAGE}-built
     docker commit "$id" ${COMMIT_DOCKER_IMAGE}
+    test_fuzzy_pytorch ${COMMIT_DOCKER_IMAGE}
+}
+
+function test_fuzzy_pytorch() {
+docker_image=$1
+cat << 'EOF' | docker run -i $docker_image bash
+VFC_BACKENDS="libinterflop_mca.so" python -c "
+import torch
+import pickle
+
+N_SAMPLES = 100
+
+a = torch.tensor([[0.5885, 0.6663, 0.4825, 0.4913, 0.3757],
+                  [0.3911, 0.7989, 0.3581, 0.3432, 0.7236],
+                  [0.5128, 0.2178, 0.2068, 0.7906, 0.5767],
+                  [0.0037, 0.2509, 0.2034, 0.8508, 0.5715],
+                  [0.1072, 0.4296, 0.3166, 0.3436, 0.2760]])
+b = torch.tensor([[0.8158, 0.1416, 0.1986, 0.9440, 0.1942],
+                  [0.8634, 0.9054, 0.4473, 0.6808, 0.3795],
+                  [0.2371, 0.1120, 0.4089, 0.9029, 0.1519],
+                  [0.4150, 0.6956, 0.6720, 0.1385, 0.8701],
+                  [0.6150, 0.1443, 0.0611, 0.4893, 0.1078]])
+
+res = []
+for _ in range(N_SAMPLES):
+  res.append(a @ b)
+
+with open('fuzzy-pytorch_mean_result.pickle', 'wb') as file:
+  pickle.dump(torch.stack(res).mean(dim=0), file)
+"
+VFC_BACKENDS="libinterflop_ieee.so" python -c "
+import torch
+import pickle
+
+a = torch.tensor([[0.5885, 0.6663, 0.4825, 0.4913, 0.3757],
+                  [0.3911, 0.7989, 0.3581, 0.3432, 0.7236],
+                  [0.5128, 0.2178, 0.2068, 0.7906, 0.5767],
+                  [0.0037, 0.2509, 0.2034, 0.8508, 0.5715],
+                  [0.1072, 0.4296, 0.3166, 0.3436, 0.2760]])
+b = torch.tensor([[0.8158, 0.1416, 0.1986, 0.9440, 0.1942],
+                  [0.8634, 0.9054, 0.4473, 0.6808, 0.3795],
+                  [0.2371, 0.1120, 0.4089, 0.9029, 0.1519],
+                  [0.4150, 0.6956, 0.6720, 0.1385, 0.8701],
+                  [0.6150, 0.1443, 0.0611, 0.4893, 0.1078]])
+
+res = a @ b
+
+with open('fuzzy-pytorch_mean_result.pickle', 'rb') as file:
+  mean_res = pickle.load(file)
+
+relative_errors = (mean_res - res) / res
+print('Relative errors: ')
+print(relative_errors)
+
+assert torch.allclose(mean_res, res)
+print('Test of matrix multiplication passed')
+"
+EOF
 }
 
 main "$@"
