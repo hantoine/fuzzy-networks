@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #====================== **WARNING** ===========================================
-# Should be run in a VM or cloud instance (Ubuntu )
+# Should be run in a VM or cloud instance (used c5d.2xlarge with Ubuntu 16.04)
 # This script will modify the configuration of the system and install things
 # Should be run with no password sudo access
 #==============================================================================
