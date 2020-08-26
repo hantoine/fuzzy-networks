@@ -140,9 +140,9 @@ index 0000000..afd1342
 +  sudo apt-get install -y --no-install-recommends libmpfr-dev libtool
 +  pip install bigfloat
 +
-+  git clone https://github.com/verificarlo/verificarlo
++  git clone https://github.com/yohanchatelain/verificarlo
 +  cd verificarlo
-+  git checkout v0.4.0
++  git checkout compiler-arguments
 +  export PATH="$PATH:/usr/lib/llvm-9/bin/"
 +  ./autogen.sh
 +  ./configure --without-flang CC=gcc-7 CXX=g++-7
@@ -309,7 +309,7 @@ function build() {
     # Customizations:
     patch_build_script_to_handle_verificarlo
     setup_function_instrumentation $id
-    disable_parallel_compilation
+    # disable_parallel_compilation
     disable_blas
 
     docker cp /home/circleci/project/. $id:/var/lib/jenkins/workspace
