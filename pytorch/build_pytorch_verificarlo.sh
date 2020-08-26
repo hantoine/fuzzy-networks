@@ -12,6 +12,7 @@ function main() {
     prepare_machine "$@"
     prepare_docker_image # Correspond docker-pytorch-linux-bionic-py3.6-clang9 CircleCI job
     build # Correspond pytorch_linux_bionic_py3_6_clang9_build CircleCI job
+    sudo poweroff
 }
 
 # Install dependencies and create circleci user
@@ -21,7 +22,7 @@ function prepare_machine() {
         # Installing Docker from official docker repos because is required for later
         sudo apt-get update
         sudo apt-get install -y apt-transport-https ca-certificates curl \
-                                gnupg-agent software-properties-common
+                                gnupg-agent software-properties-common jq
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
         sudo apt-key fingerprint 0EBFCD88
         sudo add-apt-repository \
@@ -327,7 +328,14 @@ function build() {
     # Commit built Docker image
     COMMIT_DOCKER_IMAGE=${DOCKER_IMAGE}-built
     docker commit "$id" ${COMMIT_DOCKER_IMAGE}
+    
     test_fuzzy_pytorch ${COMMIT_DOCKER_IMAGE}
+    if [ "$?" -eq "0" ] ; then # Tests passed
+        DOCKERHUB_TOKEN=$(aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken | jq -r '.SecretString')
+        echo $DOCKERHUB_TOKEN | docker login --username hantoine --password-stdin
+        docker tag ${COMMIT_DOCKER_IMAGE} hantoine/fuzzy-pytorch
+        docker push hantoine/fuzzy-pytorch
+    fi
 }
 
 function test_fuzzy_pytorch() {
@@ -385,6 +393,7 @@ assert torch.allclose(mean_res, res)
 print('Test of matrix multiplication passed')
 "
 EOF
+return $?
 }
 
 main "$@"
