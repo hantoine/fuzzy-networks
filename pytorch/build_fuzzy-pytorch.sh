@@ -3,7 +3,7 @@
 #====================== **WARNING** ===========================================
 # Should be run in a VM or cloud instance (used c5d.2xlarge with Ubuntu 16.04)
 # This script will modify the configuration of the system and install things
-# Should be run with no password sudo access
+# Should be run with access to sudo without password
 #==============================================================================
 
 set -e
@@ -47,29 +47,6 @@ function prepare_machine() {
 # Build Docker image
 # See: https://app.circleci.com/pipelines/github/pytorch/pytorch/201040/workflows/05547b7e-f7c7-447e-b6cf-0158d15bc6e3/jobs/6745572
 function prepare_docker_image() {
-    export  CI=true \
-            CIRCLECI=true \
-            CIRCLE_BRANCH=master \
-            CIRCLE_BUILD_NUM=6745572 \
-            CIRCLE_BUILD_URL=https://circleci.com/gh/pytorch/pytorch/6745572  \
-            CIRCLE_COMPARE_URL=  \
-            CIRCLE_JOB=docker-pytorch-linux-bionic-py3.6-clang9 \
-            CIRCLE_NODE_INDEX=0 \
-            CIRCLE_NODE_TOTAL=1 \
-            CIRCLE_PREVIOUS_BUILD_NUM=6745571 \
-            CIRCLE_PROJECT_REPONAME=pytorch \
-            CIRCLE_PROJECT_USERNAME=pytorch \
-            CIRCLE_REPOSITORY_URL=https://github.com/pytorch/pytorch \
-            CIRCLE_SHA1=248b6a30f4d5b08876d1e7e6f350875ff6c1c5da \
-            CIRCLE_SHELL_ENV=/tmp/.bash_env-5f3a300e43589b612a80a17b-0-build \
-            CIRCLE_STAGE=docker-pytorch-linux-bionic-py3.6-clang9 \
-            CIRCLE_USERNAME=facebook-github-bot \
-            CIRCLE_WORKFLOW_ID=05547b7e-f7c7-447e-b6cf-0158d15bc6e3 \
-            CIRCLE_WORKFLOW_JOB_ID=5159d8c6-9ece-4d27-82cd-3bfa0dc51fb3 \
-            CIRCLE_WORKFLOW_UPSTREAM_JOB_IDS= \
-            CIRCLE_WORKFLOW_WORKSPACE_ID=05547b7e-f7c7-447e-b6cf-0158d15bc6e3 \
-            CIRCLE_WORKING_DIRECTORY=~/project
-
     mkdir -p /home/circleci/project
     cd /home/circleci/project
     git clone https://github.com/pytorch/pytorch .
@@ -140,9 +117,9 @@ index 0000000..afd1342
 +  sudo apt-get install -y --no-install-recommends libmpfr-dev libtool
 +  pip install bigfloat
 +
-+  git clone https://github.com/yohanchatelain/verificarlo
++  git clone https://github.com/verificarlo/verificarlo
 +  cd verificarlo
-+  git checkout compiler-arguments
++  git checkout 09b24e04797dcf849ca1080d8d06e6d89a14dc65
 +  export PATH="$PATH:/usr/lib/llvm-9/bin/"
 +  ./autogen.sh
 +  ./configure --without-flang CC=gcc-7 CXX=g++-7
@@ -271,26 +248,9 @@ sed -Ei "s/MAX_JOBS=[0-9]+/MAX_JOBS=1/" $BASH_ENV
 function build() {
     export BASH_ENV=/home/circleci/project/env \
            CI=true \
-           CIRCLECI=true \
-           CIRCLE_BRANCH=master \
-           CIRCLE_COMPARE_URL= \
-           CIRCLE_JOB=pytorch_linux_bionic_py3_6_clang9_build \
-           CIRCLE_NODE_INDEX=0 \
-           CIRCLE_NODE_TOTAL=1 \
-           CIRCLE_PROJECT_REPONAME=pytorch \
-           CIRCLE_PROJECT_USERNAME=pytorch \
-           CIRCLE_REPOSITORY_URL=https://github.com/pytorch/pytorch \
-           CIRCLE_SHA1=248b6a30f4d5b08876d1e7e6f350875ff6c1c5da \
-           CIRCLE_SHELL_ENV=/tmp/.bash_env-5f3a30442147c967bb3294a3-0-build \
-           CIRCLE_STAGE=pytorch_linux_bionic_py3_6_clang9_build \
-           CIRCLE_USERNAME=facebook-github-bot \
-           CIRCLE_WORKFLOW_ID=05547b7e-f7c7-447e-b6cf-0158d15bc6e3 \
-           CIRCLE_WORKFLOW_JOB_ID=3099fd50-d6f3-445f-81b4-a60d42f1d6a9 \
-           CIRCLE_WORKFLOW_UPSTREAM_JOB_IDS=5159d8c6-9ece-4d27-82cd-3bfa0dc51fb3 \
-           CIRCLE_WORKFLOW_WORKSPACE_ID=05547b7e-f7c7-447e-b6cf-0158d15bc6e3 \
-           CIRCLE_WORKING_DIRECTORY=~/project \
+           CIRCLECI=true
 
-    # Skip checkout of code since already done in previous "CircleCI Job"
+    # Reusing source code cloned in previous "CircleCI Job"
 
     # See pytorch_params section of CircleCI config
     # export BUILD_ENVIRONMENT="pytorch-linux-bionic-py3.6-clang9-build"
