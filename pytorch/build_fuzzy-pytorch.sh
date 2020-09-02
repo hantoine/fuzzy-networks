@@ -34,10 +34,10 @@ function prepare_machine() {
         sudo adduser circleci -q --disabled-password --gecos "" || true
         sudo adduser circleci docker
         sudo bash -c "echo \"circleci ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/10-circleci-user"
-        
+
         # Create link pip to pip3
         sudo ln -s /usr/bin/pip3 /usr/bin/pip
-        
+
         # Continue as circleci user
         exec sudo su circleci -c "$(readlink -f $0) as-circleci"
     fi
@@ -74,7 +74,7 @@ function prepare_docker_image() {
     cd /home/circleci/project
     git clone https://github.com/pytorch/pytorch .
     git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 # patchs regularly get broken
-    
+
     # Add verificarlo to docker image
     patch_docker_build_scripts
 
@@ -85,7 +85,7 @@ function prepare_docker_image() {
     export DOCKER_BUILDKIT="1"
 
     # Original command: cd .circleci/docker && ./build_docker.sh
-    # this script deals with AWS to check if the docker image should be build 
+    # this script deals with AWS to check if the docker image should be build
     # and to push it to AWS ECR once built
     # We can summarize the script to:
     cd .circleci/docker
@@ -162,7 +162,7 @@ index 61d426f..a0dcc79 100644
 @@ -17,6 +17,11 @@ ARG CLANG_VERSION
  ADD ./common/install_travis_python.sh install_travis_python.sh
  RUN bash ./install_travis_python.sh && rm install_travis_python.sh
- 
+
 +# Install Verificarlo
 +ARG VERIFICARLO_VERSION
 +ADD ./common/install_verificarlo.sh install_verificarlo.sh
@@ -171,7 +171,7 @@ index 61d426f..a0dcc79 100644
  # (optional) Install protobuf for ONNX
  ARG PROTOBUF
  ADD ./common/install_protobuf.sh install_protobuf.sh
--- 
+--
 2.7.4
 
 EOF
@@ -224,7 +224,7 @@ EOF
 function setup_function_instrumentation() {
 # Also adding -Qunused-arguments arg to fix Unused arguement warnings (becomes error with -Werror)
 id=$1
-cat << 'EOFF' | docker exec -u jenkins -i "$id" bash 
+cat << 'EOFF' | docker exec -u jenkins -i "$id" bash
 sudo mkdir -p /etc/verificarlo
 cat << 'EOF' | sudo tee /etc/verificarlo/inclusion-file >> /dev/null
 # [file without suffix] [mangled function name]
@@ -289,16 +289,16 @@ function build() {
            CIRCLE_WORKFLOW_UPSTREAM_JOB_IDS=5159d8c6-9ece-4d27-82cd-3bfa0dc51fb3 \
            CIRCLE_WORKFLOW_WORKSPACE_ID=05547b7e-f7c7-447e-b6cf-0158d15bc6e3 \
            CIRCLE_WORKING_DIRECTORY=~/project \
-    
+
     # Skip checkout of code since already done in previous "CircleCI Job"
-    
+
     # See pytorch_params section of CircleCI config
     # export BUILD_ENVIRONMENT="pytorch-linux-bionic-py3.6-clang9-build"
     export BUILD_ENVIRONMENT="pytorch-linux-bionic-py3.6-verificarlo-build"
     export DOCKER_IMAGE=$IMAGE_NAME # No access to aws ecr, use local image
     export USE_CUDA_RUNTIME=""
     export BUILD_ONLY=""
-    
+
     .circleci/scripts/setup_linux_system_environment.sh
     .circleci/scripts/setup_ci_environment.sh
 
@@ -328,14 +328,47 @@ function build() {
     # Commit built Docker image
     COMMIT_DOCKER_IMAGE=${DOCKER_IMAGE}-built
     docker commit "$id" ${COMMIT_DOCKER_IMAGE}
-    
-    test_fuzzy_pytorch ${COMMIT_DOCKER_IMAGE}
-    if [ "$?" -eq "0" ] ; then # Tests passed
-        DOCKERHUB_TOKEN=$(aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken | jq -r '.SecretString')
-        echo $DOCKERHUB_TOKEN | docker login --username hantoine --password-stdin
-        docker tag ${COMMIT_DOCKER_IMAGE} hantoine/fuzzy-pytorch
-        docker push hantoine/fuzzy-pytorch
-    fi
+    push_final_docker_image ${COMMIT_DOCKER_IMAGE}
+}
+
+function push_final_docker_image() {
+	build_docker_image=$1
+	cd ~
+	mkdir -p fuzzy-pytorch
+	cat << 'EOF' > fuzzy-pytorch/Dockerfile
+FROM ubuntu:18.04
+
+RUN     apt-get update && \
+        apt-get install -y wget && \
+        wget -q "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" && \
+        chmod +x ./Miniconda3-latest-Linux-x86_64.sh && \
+        ./Miniconda3-latest-Linux-x86_64.sh -b -f -p "/opt/conda" && \
+        /opt/conda/bin/conda install -y python="3.6" numpy=1.18.5 pyyaml mkl mkl-include setuptools \
+                                        cffi typing typing_extensions future six dataclasses && \
+        rm -rf /var/lib/apt/lists/* Miniconda3-latest-Linux-x86_64.sh
+
+ENV     PATH="/opt/conda/bin:${PATH}"
+
+COPY    --from=fuzzy-pytorch-builder \
+        /opt/conda/lib/python3.6/site-packages/torch /opt/conda/lib/python3.6/site-packages/torch
+COPY    --from=fuzzy-pytorch-builder \
+        /usr/local/lib/libinterflop_*.so /usr/local/lib/
+COPY    --from=fuzzy-pytorch-builder \
+        /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/
+
+ENV     VFC_BACKENDS="libinterflop_mca.so"
+
+ENTRYPOINT bash
+EOF
+	docker tag $build_docker_image fuzzy-pytorch-builder
+	docker build fuzzy-pytorch -t fuzzy-pytorch
+	test_fuzzy_pytorch "fuzzy-pytorch"
+	if [ "$?" -eq "0" ] ; then # Tests passed
+		DOCKERHUB_TOKEN=$(aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken | jq -r '.SecretString')
+		echo $DOCKERHUB_TOKEN | docker login --username hantoine --password-stdin
+		docker tag fuzzy-pytorch hantoine/fuzzy-pytorch
+		docker push hantoine/fuzzy-pytorch
+	fi
 }
 
 function test_fuzzy_pytorch() {
@@ -370,7 +403,7 @@ correct_res = a @ b
 with open('fuzzy-pytorch_mca_results.pickle', 'rb') as file:
   mca_res = pickle.load(file)
 
-mean_res = mca_res.mean(dim=0) 
+mean_res = mca_res.mean(dim=0)
 relative_errors = (mean_res - correct_res) / correct_res
 print('Relative errors: ')
 print(relative_errors)
