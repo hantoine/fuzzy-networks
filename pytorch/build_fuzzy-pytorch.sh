@@ -328,7 +328,22 @@ EOF
 		echo $DOCKERHUB_TOKEN | docker login --username hantoine --password-stdin
 		docker tag fuzzy-pytorch hantoine/fuzzy-pytorch
 		docker push hantoine/fuzzy-pytorch
+		push_image_with_jupyterlab
 	fi
+}
+
+push_image_with_jupyterlab() {
+	mkdir -p fuzzy-pytorch-jupyter
+	cat << 'EOF' > fuzzy-pytorch-jupyter/Dockerfile
+FROM hantoine/fuzzy-pytorch
+
+RUN conda install -y jupyterlab
+EXPOSE 8888/tcp
+
+ENTRYPOINT ["/opt/conda/bin/jupyter", "lab", "--ip=0.0.0.0", "--allow-root"]
+EOF
+	docker build fuzzy-pytorch-jupyter -t hantoine/fuzzy-pytorch:jupyter
+	docker push hantoine/fuzzy-pytorch:jupyter
 }
 
 function test_fuzzy_pytorch() {
