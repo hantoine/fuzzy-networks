@@ -3,7 +3,7 @@
 #====================== **WARNING** ===========================================
 # Should be run in a VM or cloud instance (used c5d.2xlarge with Ubuntu 16.04)
 # This script will modify the configuration of the system and install things
-# Should be run with access to sudo without password
+# Should be run as root
 #==============================================================================
 
 set -e
@@ -12,32 +12,26 @@ function main() {
     prepare_machine "$@"
     prepare_docker_image # Correspond docker-pytorch-linux-bionic-py3.6-clang9 CircleCI job
     build # Correspond pytorch_linux_bionic_py3_6_clang9_build CircleCI job
-    sudo poweroff
+    poweroff
 }
 
 # Install dependencies and create circleci user
 function prepare_machine() {
-    if [ "$1" != "with-docker" ] ; then
-        # Installing Docker from official docker repos because is required for later
-        sudo apt-get update
-        sudo apt-get install -y apt-transport-https ca-certificates curl \
-                                gnupg-agent software-properties-common jq
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-        sudo apt-key fingerprint 0EBFCD88
-        sudo add-apt-repository \
-            "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-        sudo apt-get update
-        sudo apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial
+    echo "root==$(whoami)"
 
-        export USER=$(whoami) # USER env var might be already defined
-        sudo bash -c "echo \"$USER ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/10-nopasswd"
-        sudo adduser $USER docker
+    # Installing Docker from official docker repos because is required for later
+    apt-get update
+    apt-get install -y apt-transport-https ca-certificates curl \
+                            gnupg-agent software-properties-common jq
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+    apt-key fingerprint 0EBFCD88
+    add-apt-repository \
+        "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update
+    apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial
 
-        # Create link pip to pip3
-        sudo ln -s /usr/bin/pip3 /usr/bin/pip
-
-        exec sudo su $USER -c "$(readlink -f $0) with-docker"
-    fi
+    # Create link pip to pip3
+    ln -s /usr/bin/pip3 /usr/bin/pip
 }
 
 # Build Docker image
