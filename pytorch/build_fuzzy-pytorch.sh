@@ -256,7 +256,7 @@ function build() {
     .circleci/scripts/setup_ci_environment.sh
 
     echo "Launching the build docker container(${DOCKER_IMAGE}:${DOCKER_TAG})"
-    export id=$(docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -t -d -w /var/lib/jenkins ${DOCKER_IMAGE}:${DOCKER_TAG})
+    export id=$(docker run -t -d -w /var/lib/jenkins ${DOCKER_IMAGE}:${DOCKER_TAG})
     git submodule sync && git submodule update -q --init --recursive
 
     # Customizations:
@@ -267,14 +267,7 @@ function build() {
 
     docker cp /home/$USER/project/. $id:/var/lib/jenkins/workspace
 
-    if [[ ${BUILD_ENVIRONMENT} == *"paralleltbb"* ]]; then
-        export PARALLEL_FLAGS="export ATEN_THREADING=TBB USE_TBB=1 "
-    elif [[ ${BUILD_ENVIRONMENT} == *"parallelnative"* ]]; then
-        export PARALLEL_FLAGS="export ATEN_THREADING=NATIVE "
-    fi
-    echo "Parallel backend flags: "${PARALLEL_FLAGS}
-
-    export COMMAND='((echo "export BUILD_ENVIRONMENT=${BUILD_ENVIRONMENT}" && echo '"$PARALLEL_FLAGS"' && echo "set -a && source ./workspace/env && set +a" && echo "sudo chown -R jenkins workspace && cd workspace && .jenkins/pytorch/build.sh && find ${BUILD_ROOT} -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete") | docker exec -u jenkins -i "$id" bash) 2>&1'
+    export COMMAND='((echo "export BUILD_ENVIRONMENT=${BUILD_ENVIRONMENT}" && echo "set -a && source ./workspace/env && set +a" && echo "sudo chown -R jenkins workspace && cd workspace && .jenkins/pytorch/build.sh && find ${BUILD_ROOT} -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete") | docker exec -u jenkins -i "$id" bash) 2>&1'
 
     echo ${COMMAND} > ./command.sh && unbuffer bash ./command.sh | ts
 
