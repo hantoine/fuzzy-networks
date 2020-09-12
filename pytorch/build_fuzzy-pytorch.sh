@@ -17,8 +17,7 @@ function main() {
 
 # Install dependencies and create circleci user
 function prepare_machine() {
-    if [ "$1" != "as-circleci" ] ; then
-
+    if [ "$1" != "with-docker" ] ; then
         # Installing Docker from official docker repos because is required for later
         sudo apt-get update
         sudo apt-get install -y apt-transport-https ca-certificates curl \
@@ -30,25 +29,22 @@ function prepare_machine() {
         sudo apt-get update
         sudo apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial
 
-        # Create circleci user with docker and sudo access
-        sudo adduser circleci -q --disabled-password --gecos "" || true
-        sudo adduser circleci docker
-        sudo bash -c "echo \"circleci ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/10-circleci-user"
+        export USER=$(whoami) # USER env var might be already defined
+        sudo bash -c "echo \"$USER ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/10-nopasswd"
+        sudo adduser $USER docker
 
         # Create link pip to pip3
         sudo ln -s /usr/bin/pip3 /usr/bin/pip
 
-        # Continue as circleci user
-        exec sudo su circleci -c "$(readlink -f $0) as-circleci"
+        exec sudo su $USER -c "$(readlink -f $0) with-docker"
     fi
-    echo "Continuing as $(whoami)"
 }
 
 # Build Docker image
 # See: https://app.circleci.com/pipelines/github/pytorch/pytorch/201040/workflows/05547b7e-f7c7-447e-b6cf-0158d15bc6e3/jobs/6745572
 function prepare_docker_image() {
-    mkdir -p /home/circleci/project
-    cd /home/circleci/project
+    mkdir -p /home/$USER/project
+    cd /home/$USER/project
     git clone https://github.com/pytorch/pytorch .
     git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 # patchs regularly get broken
 
@@ -61,13 +57,10 @@ function prepare_docker_image() {
     export DOCKER_CLI_EXPERIMENTAL="enabled"
     export DOCKER_BUILDKIT="1"
 
-    # Original command: cd .circleci/docker && ./build_docker.sh
-    # this script deals with AWS to check if the docker image should be build
-    # and to push it to AWS ECR once built
-    # We can summarize the script to:
-    cd .circleci/docker
-    ./build.sh $IMAGE_NAME -t $IMAGE_NAME:$DOCKER_TAG
-    cd ../..
+    (
+        cd .circleci/docker
+        ./build.sh $IMAGE_NAME -t $IMAGE_NAME:$DOCKER_TAG
+    )
 }
 
 function patch_docker_build_scripts() {
@@ -246,7 +239,7 @@ sed -Ei "s/MAX_JOBS=[0-9]+/MAX_JOBS=1/" $BASH_ENV
 }
 
 function build() {
-    export BASH_ENV=/home/circleci/project/env \
+    export BASH_ENV=/home/$USER/project/env \
            CI=true \
            CIRCLECI=true
 
@@ -272,7 +265,7 @@ function build() {
     # disable_parallel_compilation
     disable_blas
 
-    docker cp /home/circleci/project/. $id:/var/lib/jenkins/workspace
+    docker cp /home/$USER/project/. $id:/var/lib/jenkins/workspace
 
     if [[ ${BUILD_ENVIRONMENT} == *"paralleltbb"* ]]; then
         export PARALLEL_FLAGS="export ATEN_THREADING=TBB USE_TBB=1 "
