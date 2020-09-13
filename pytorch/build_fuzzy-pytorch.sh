@@ -12,6 +12,7 @@ function main() {
     prepare_machine "$@"
     prepare_docker_image # Correspond docker-pytorch-linux-bionic-py3.6-clang9 CircleCI job
     build # Correspond pytorch_linux_bionic_py3_6_clang9_build CircleCI job
+    echo -e "===========================\n  BUILD SCRIPT SUCCEEDED\n===========================\n"
     poweroff
 }
 
@@ -23,6 +24,7 @@ function prepare_machine() {
     apt-get update
     apt-get install -y apt-transport-https ca-certificates curl \
                             gnupg-agent software-properties-common jq
+    apt-get install -y moreutils expect-dev # For unbufer and ts
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
     apt-key fingerprint 0EBFCD88
     add-apt-repository \
@@ -225,8 +227,7 @@ EOF
 }
 
 function build() {
-    export BASH_ENV=/home/$USER/project/env \
-           CI=true \
+    export CI=true \
            CIRCLECI=true
 
     # Reusing source code cloned in previous "CircleCI Job"
@@ -238,7 +239,13 @@ function build() {
     export USE_CUDA_RUNTIME=""
     export BUILD_ONLY=""
 
-    .circleci/scripts/setup_ci_environment.sh
+    # Attempting to replace the script setup_ci_environment.sh by:
+    cat << EOF > /home/$USER/project/env
+IN_CIRCLECI=1
+BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo-build
+MAX_JOBS=$(($(nproc) - 1))
+EOF
+
 
     echo "Launching the build docker container(${DOCKER_IMAGE}:${DOCKER_TAG})"
     export id=$(docker run -t -d -w /var/lib/jenkins ${DOCKER_IMAGE}:${DOCKER_TAG})
