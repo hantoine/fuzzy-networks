@@ -37,46 +37,47 @@ function prepare_docker_image() {
     # Add verificarlo to docker image
     patch_docker_build_scripts
 
-    export DOCKER_TAG=$(git rev-parse HEAD:.circleci/docker)
-    export IMAGE_NAME=pytorch-linux-bionic-py3.6-verificarlo
-    (
-        cd .circleci/docker
-        ./build.sh $IMAGE_NAME -t $IMAGE_NAME:$DOCKER_TAG
-    )
+    docker build \
+        --no-cache \
+        --progress=plain \
+        --build-arg TRAVIS_DL_URL_PREFIX=https://s3.amazonaws.com/travis-python-archives/binaries/ubuntu/14.04/x86_64 \
+        --build-arg BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo \
+        --build-arg PROTOBUF=yes \
+        --build-arg THRIFT= \
+        --build-arg LLVMDEV=yes \
+        --build-arg DB=yes \
+        --build-arg VISION=yes \
+        --build-arg EC2= \
+        --build-arg JENKINS= \
+        --build-arg JENKINS_UID= \
+        --build-arg JENKINS_GID= \
+        --build-arg UBUNTU_VERSION=18.04 \
+        --build-arg CENTOS_VERSION= \
+        --build-arg DEVTOOLSET_VERSION= \
+        --build-arg GLIBC_VERSION= \
+        --build-arg CLANG_VERSION=9 \
+        --build-arg VERIFICARLO_VERSION=github \
+        --build-arg ANACONDA_PYTHON_VERSION=3.6 \
+        --build-arg TRAVIS_PYTHON_VERSION= \
+        --build-arg GCC_VERSION= \
+        --build-arg CUDA_VERSION= \
+        --build-arg CUDNN_VERSION= \
+        --build-arg ANDROID= \
+        --build-arg ANDROID_NDK= \
+        --build-arg GRADLE_VERSION= \
+        --build-arg VULKAN_SDK_VERSION= \
+        --build-arg SWIFTSHADER= \
+        --build-arg CMAKE_VERSION= \
+        --build-arg NINJA_VERSION= \
+        --build-arg KATEX= \
+        --build-arg ROCM_VERSION= \
+        -f .circleci/docker/ubuntu/Dockerfile \
+        -t fuzzy-pytorch-buildenv \
+        .circleci/docker
 }
 
 function patch_docker_build_scripts() {
 cat << 'EOF' | git apply
-diff --git a/.circleci/docker/build.sh b/.circleci/docker/build.sh
-index 20a80cf..76524fc 100755
---- a/.circleci/docker/build.sh
-+++ b/.circleci/docker/build.sh
-@@ -202,8 +202,17 @@ case "$image" in
-     DB=yes
-     VISION=yes
-     VULKAN_SDK_VERSION=1.2.148.0
-     SWIFTSHADER=yes
-     ;;
-+  pytorch-linux-bionic-py3.6-verificarlo)
-+    ANACONDA_PYTHON_VERSION=3.6
-+    CLANG_VERSION=9
-+    VERIFICARLO_VERSION=github
-+    LLVMDEV=yes
-+    PROTOBUF=yes
-+    DB=yes
-+    VISION=yes
-+    ;;
-   pytorch-linux-bionic-py3.8-gcc9)
-     ANACONDA_PYTHON_VERSION=3.8
-     GCC_VERSION=9
-@@ -345,6 +354,7 @@ docker build \
-        --build-arg "DEVTOOLSET_VERSION=${DEVTOOLSET_VERSION}" \
-        --build-arg "GLIBC_VERSION=${GLIBC_VERSION}" \
-        --build-arg "CLANG_VERSION=${CLANG_VERSION}" \
-+       --build-arg "VERIFICARLO_VERSION=${VERIFICARLO_VERSION}" \
-        --build-arg "ANACONDA_PYTHON_VERSION=${ANACONDA_PYTHON_VERSION}" \
-        --build-arg "TRAVIS_PYTHON_VERSION=${TRAVIS_PYTHON_VERSION}" \
-        --build-arg "GCC_VERSION=${GCC_VERSION}" \
 diff --git a/.circleci/docker/common/install_verificarlo.sh b/.circleci/docker/common/install_verificarlo.sh
 new file mode 100755
 index 0000000..afd1342
@@ -223,9 +224,8 @@ function build() {
     # Reusing source code cloned in previous "CircleCI Job"
 
     # See pytorch_params section of CircleCI config
-    # export BUILD_ENVIRONMENT="pytorch-linux-bionic-py3.6-clang9-build"
     export BUILD_ENVIRONMENT="pytorch-linux-bionic-py3.6-verificarlo-build"
-    export DOCKER_IMAGE=$IMAGE_NAME # No access to aws ecr, use local image
+    export DOCKER_IMAGE="fuzzy-pytorch-buildenv"
     export USE_CUDA_RUNTIME=""
     export BUILD_ONLY=""
 
@@ -237,8 +237,8 @@ MAX_JOBS=$(($(nproc) - 1))
 EOF
 
 
-    echo "Launching the build docker container(${DOCKER_IMAGE}:${DOCKER_TAG})"
-    export id=$(docker run -t -d -w /var/lib/jenkins ${DOCKER_IMAGE}:${DOCKER_TAG})
+    echo "Launching the build docker container (${DOCKER_IMAGE}):"
+    export id=$(docker run -t -d -w /var/lib/jenkins ${DOCKER_IMAGE})
     git submodule sync && git submodule update -q --init --recursive
 
     # Customizations:
