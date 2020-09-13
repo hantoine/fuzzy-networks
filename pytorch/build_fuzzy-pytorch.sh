@@ -21,9 +21,6 @@ function prepare_machine() {
     # Installing docker
     apt-get install -y docker.io
 
-    # Install pip command as pip3
-    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
-
     # Logging in to Docker Hub
     aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken --output text \
         | head -n 1 | cut  -f 4 \
@@ -89,6 +86,7 @@ function prepare_docker_image() {
     else
         docker tag hantoine/fuzzy-pytorch-buildenv:$docker_tag fuzzy-pytorch-buildenv
     fi
+    cd ..
 }
 
 function patch_docker_build_scripts() {
@@ -145,8 +143,8 @@ index 61d426f..a0dcc79 100644
 EOF
 }
 
-function patch_build_script_to_handle_verificarlo() {
-cat << 'EOF' | git apply
+function extract_build_script_patch() {
+cat << 'EOF' > build_script_patch
 diff --git a/.jenkins/pytorch/build.sh b/.jenkins/pytorch/build.sh
 index 8730b61..23c9f92 100755
 --- a/.jenkins/pytorch/build.sh
@@ -189,10 +187,8 @@ index 682dd29b4c..645063251b 100644
 EOF
 }
 
-function setup_function_instrumentation() {
-# Also adding -Qunused-arguments arg to fix Unused arguement warnings (becomes error with -Werror)
-id=$1
-cat << 'EOFF' | docker exec -u jenkins -i "$id" bash
+function extract_script_setting_up_function_instrumentation() {
+cat << 'EOFF' > script_setting_up_function_instrumentation
 sudo mkdir -p /etc/verificarlo
 cat << 'EOF' | sudo tee /etc/verificarlo/inclusion-file >> /dev/null
 # [file without suffix] [mangled function name]
@@ -214,8 +210,9 @@ EOF
 EOFF
 }
 
-function disable_blas() {
-cat << 'EOF' | git apply
+function extract_patch_disabling_blas() {
+
+cat << 'EOF' > patch_disabling_blas
 diff --git a/.jenkins/pytorch/build.sh b/.jenkins/pytorch/build.sh
 index 23c9f92..f972150 100755
 --- a/.jenkins/pytorch/build.sh
@@ -233,37 +230,45 @@ EOF
 }
 
 function build() {
-    echo "Launching the build docker container:"
-    export id=$(docker run -t -d -w /var/lib/jenkins fuzzy-pytorch-buildenv)
+    extract_build_script_patch
+    extract_patch_disabling_blas
+    extract_script_setting_up_function_instrumentation
+
+    cat << EOF > Dockerfile
+FROM fuzzy-pytorch-buildenv
+
+# WORKDIR would create it but as root
+RUN mkdir /var/lib/jenkins/workspace
+
+WORKDIR /var/lib/jenkins/workspace
+RUN git clone https://github.com/pytorch/pytorch . && \
+    git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 && \
     git submodule sync && git submodule update -q --init --recursive
 
-    # Customizations:
-    patch_build_script_to_handle_verificarlo
-    setup_function_instrumentation $id
-    disable_blas
+# Patch build script
+ADD build_script_patch .
+RUN git apply build_script_patch
 
-    # Move PyTorch code inside docker container
-    docker cp . $id:/var/lib/jenkins/workspace
+# Disable BLAS
+ADD patch_disabling_blas .
+RUN git apply patch_disabling_blas
 
-    # Build Fuzzy PyTorch inside docker
-    cat << EOF | docker exec -u jenkins -i "$id" bash
-export IN_CIRCLECI=1 \
-       BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo-build \
-       MAX_JOBS=$(($(nproc) - 1))
-sudo chown -R jenkins workspace
-cd workspace
-.jenkins/pytorch/build.sh
-find . -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete
+# Setup function instrumentation
+ADD script_setting_up_function_instrumentation .
+RUN bash script_setting_up_function_instrumentation
+
+ENV IN_CIRCLECI=1 \
+    BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo-build \
+    MAX_JOBS=$(($(nproc) - 1))
+RUN .jenkins/pytorch/build.sh && \
+    find . -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete
+
 EOF
-
-    # Commit built Docker image
-    docker commit "$id" "fuzzy-pytorch-built"
-    push_final_docker_image "fuzzy-pytorch-built"
+    docker build . -t fuzzy-pytorch-built
+    push_final_docker_image
 }
 
 function push_final_docker_image() {
-	build_docker_image=$1
-	cd ~
 	mkdir -p fuzzy-pytorch
 	cat << 'EOF' > fuzzy-pytorch/Dockerfile
 FROM ubuntu:18.04
@@ -279,18 +284,17 @@ RUN     apt-get update && \
 
 ENV     PATH="/opt/conda/bin:${PATH}"
 
-COPY    --from=fuzzy-pytorch-builder \
+COPY    --from=fuzzy-pytorch-built \
         /opt/conda/lib/python3.6/site-packages/torch /opt/conda/lib/python3.6/site-packages/torch
-COPY    --from=fuzzy-pytorch-builder \
+COPY    --from=fuzzy-pytorch-built \
         /usr/local/lib/libinterflop_*.so /usr/local/lib/
-COPY    --from=fuzzy-pytorch-builder \
+COPY    --from=fuzzy-pytorch-built \
         /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/
 
 ENV     VFC_BACKENDS="libinterflop_mca.so"
 
 ENTRYPOINT bash
 EOF
-	docker tag $build_docker_image fuzzy-pytorch-builder
 	docker build fuzzy-pytorch -t fuzzy-pytorch
 	test_fuzzy_pytorch "fuzzy-pytorch"
 	if [ "$?" -eq "0" ] ; then # Tests passed
