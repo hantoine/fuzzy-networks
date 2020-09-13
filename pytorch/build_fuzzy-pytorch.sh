@@ -39,46 +39,58 @@ function prepare_docker_image() {
     git clone https://github.com/pytorch/pytorch .
     git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 # patchs regularly get broken
 
-    # Add verificarlo to docker image
-    patch_docker_build_scripts
+    docker_tag=$(git rev-parse HEAD:.circleci/docker)
+    set +e
+    docker pull hantoine/fuzzy-pytorch-buildenv:$docker_tag
+    docker_pull_ret=$?
+    set -e
+    if [ "$docker_pull_ret" -ne "0" ] ; then
 
-    docker build \
-        --no-cache \
-        --progress=plain \
-        --build-arg TRAVIS_DL_URL_PREFIX=https://s3.amazonaws.com/travis-python-archives/binaries/ubuntu/14.04/x86_64 \
-        --build-arg BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo \
-        --build-arg PROTOBUF=yes \
-        --build-arg THRIFT= \
-        --build-arg LLVMDEV=yes \
-        --build-arg DB=yes \
-        --build-arg VISION=yes \
-        --build-arg EC2= \
-        --build-arg JENKINS= \
-        --build-arg JENKINS_UID= \
-        --build-arg JENKINS_GID= \
-        --build-arg UBUNTU_VERSION=18.04 \
-        --build-arg CENTOS_VERSION= \
-        --build-arg DEVTOOLSET_VERSION= \
-        --build-arg GLIBC_VERSION= \
-        --build-arg CLANG_VERSION=9 \
-        --build-arg VERIFICARLO_VERSION=github \
-        --build-arg ANACONDA_PYTHON_VERSION=3.6 \
-        --build-arg TRAVIS_PYTHON_VERSION= \
-        --build-arg GCC_VERSION= \
-        --build-arg CUDA_VERSION= \
-        --build-arg CUDNN_VERSION= \
-        --build-arg ANDROID= \
-        --build-arg ANDROID_NDK= \
-        --build-arg GRADLE_VERSION= \
-        --build-arg VULKAN_SDK_VERSION= \
-        --build-arg SWIFTSHADER= \
-        --build-arg CMAKE_VERSION= \
-        --build-arg NINJA_VERSION= \
-        --build-arg KATEX= \
-        --build-arg ROCM_VERSION= \
-        -f .circleci/docker/ubuntu/Dockerfile \
-        -t fuzzy-pytorch-buildenv \
-        .circleci/docker
+        # Add verificarlo to docker image
+        patch_docker_build_scripts
+
+        docker build \
+            --no-cache \
+            --progress=plain \
+            --build-arg TRAVIS_DL_URL_PREFIX=https://s3.amazonaws.com/travis-python-archives/binaries/ubuntu/14.04/x86_64 \
+            --build-arg BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo \
+            --build-arg PROTOBUF=yes \
+            --build-arg THRIFT= \
+            --build-arg LLVMDEV=yes \
+            --build-arg DB=yes \
+            --build-arg VISION=yes \
+            --build-arg EC2= \
+            --build-arg JENKINS= \
+            --build-arg JENKINS_UID= \
+            --build-arg JENKINS_GID= \
+            --build-arg UBUNTU_VERSION=18.04 \
+            --build-arg CENTOS_VERSION= \
+            --build-arg DEVTOOLSET_VERSION= \
+            --build-arg GLIBC_VERSION= \
+            --build-arg CLANG_VERSION=9 \
+            --build-arg VERIFICARLO_VERSION=github \
+            --build-arg ANACONDA_PYTHON_VERSION=3.6 \
+            --build-arg TRAVIS_PYTHON_VERSION= \
+            --build-arg GCC_VERSION= \
+            --build-arg CUDA_VERSION= \
+            --build-arg CUDNN_VERSION= \
+            --build-arg ANDROID= \
+            --build-arg ANDROID_NDK= \
+            --build-arg GRADLE_VERSION= \
+            --build-arg VULKAN_SDK_VERSION= \
+            --build-arg SWIFTSHADER= \
+            --build-arg CMAKE_VERSION= \
+            --build-arg NINJA_VERSION= \
+            --build-arg KATEX= \
+            --build-arg ROCM_VERSION= \
+            -f .circleci/docker/ubuntu/Dockerfile \
+            -t fuzzy-pytorch-buildenv \
+            .circleci/docker
+        docker tag fuzzy-pytorch-buildenv hantoine/fuzzy-pytorch-buildenv:$docker_tag
+        docker push hantoine/fuzzy-pytorch-buildenv:$docker_tag
+    else
+        docker tag hantoine/fuzzy-pytorch-buildenv:$docker_tag fuzzy-pytorch-buildenv
+    fi
 }
 
 function patch_docker_build_scripts() {
