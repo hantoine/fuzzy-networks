@@ -46,7 +46,6 @@ function prepare_docker_image() {
     patch_docker_build_scripts
 
     export DOCKER_TAG=$(git rev-parse HEAD:.circleci/docker)
-    # export IMAGE_NAME=pytorch-linux-bionic-py3.6-clang9
     export IMAGE_NAME=pytorch-linux-bionic-py3.6-verificarlo
     (
         cd .circleci/docker
@@ -225,10 +224,6 @@ index 23c9f92..f972150 100755
 EOF
 }
 
-function disable_parallel_compilation() {
-sed -Ei "s/MAX_JOBS=[0-9]+/MAX_JOBS=1/" $BASH_ENV
-}
-
 function build() {
     export BASH_ENV=/home/$USER/project/env \
            CI=true \
@@ -243,7 +238,6 @@ function build() {
     export USE_CUDA_RUNTIME=""
     export BUILD_ONLY=""
 
-    .circleci/scripts/setup_linux_system_environment.sh
     .circleci/scripts/setup_ci_environment.sh
 
     echo "Launching the build docker container(${DOCKER_IMAGE}:${DOCKER_TAG})"
@@ -253,7 +247,6 @@ function build() {
     # Customizations:
     patch_build_script_to_handle_verificarlo
     setup_function_instrumentation $id
-    # disable_parallel_compilation
     disable_blas
 
     docker cp /home/$USER/project/. $id:/var/lib/jenkins/workspace
