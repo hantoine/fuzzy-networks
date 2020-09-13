@@ -48,9 +48,6 @@ function prepare_docker_image() {
     export DOCKER_TAG=$(git rev-parse HEAD:.circleci/docker)
     # export IMAGE_NAME=pytorch-linux-bionic-py3.6-clang9
     export IMAGE_NAME=pytorch-linux-bionic-py3.6-verificarlo
-    export DOCKER_CLI_EXPERIMENTAL="enabled"
-    export DOCKER_BUILDKIT="1"
-
     (
         cd .circleci/docker
         ./build.sh $IMAGE_NAME -t $IMAGE_NAME:$DOCKER_TAG
