@@ -19,11 +19,16 @@ function main() {
 # Install dependencies and create circleci user
 function prepare_machine() {
     # Installing deps:
-    # docker, jq to parse aws secretsmanager and moreutils and expect-dev for ts and unbuffer
-    apt-get install -y docker.io jq moreutils expect-dev
+    #   - docker
+    #   - moreutils and expect-dev for ts and unbuffer
+    apt-get install -y docker.io moreutils expect-dev
 
     # Install pip command as pip3
     update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+    aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken --output text \
+        | head -n 1 | cut  -f 4 \
+        | docker login --username hantoine --password-stdin
 }
 
 # Build Docker image
@@ -291,8 +296,6 @@ EOF
 	docker build fuzzy-pytorch -t fuzzy-pytorch
 	test_fuzzy_pytorch "fuzzy-pytorch"
 	if [ "$?" -eq "0" ] ; then # Tests passed
-		DOCKERHUB_TOKEN=$(aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken | jq -r '.SecretString')
-		echo $DOCKERHUB_TOKEN | docker login --username hantoine --password-stdin
 		docker tag fuzzy-pytorch hantoine/fuzzy-pytorch
 		docker push hantoine/fuzzy-pytorch
 		push_image_with_jupyterlab
