@@ -18,22 +18,12 @@ function main() {
 
 # Install dependencies and create circleci user
 function prepare_machine() {
-    echo "root==$(whoami)"
+    # Installing deps:
+    # docker, jq to parse aws secretsmanager and moreutils and expect-dev for ts and unbuffer
+    apt-get install -y docker.io jq moreutils expect-dev
 
-    # Installing Docker from official docker repos because is required for later
-    apt-get update
-    apt-get install -y apt-transport-https ca-certificates curl \
-                            gnupg-agent software-properties-common jq
-    apt-get install -y moreutils expect-dev # For unbufer and ts
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-    apt-key fingerprint 0EBFCD88
-    add-apt-repository \
-        "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    apt-get update
-    apt-get install -y docker-ce=5:18.09.4~3-0~ubuntu-xenial
-
-    # Create link pip to pip3
-    ln -s /usr/bin/pip3 /usr/bin/pip
+    # Install pip command as pip3
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 }
 
 # Build Docker image
