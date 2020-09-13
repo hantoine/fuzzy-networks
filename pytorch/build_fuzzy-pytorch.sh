@@ -18,14 +18,13 @@ function main() {
 
 # Install dependencies and create circleci user
 function prepare_machine() {
-    # Installing deps:
-    #   - docker
-    #   - moreutils and expect-dev for ts and unbuffer
-    apt-get install -y docker.io moreutils expect-dev
+    # Installing docker
+    apt-get install -y docker.io
 
     # Install pip command as pip3
     update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
+    # Logging in to Docker Hub
     aws secretsmanager get-secret-value --region us-east-2 --secret-id DockerToken --output text \
         | head -n 1 | cut  -f 4 \
         | docker login --username hantoine --password-stdin
@@ -34,9 +33,8 @@ function prepare_machine() {
 # Build Docker image
 # See: https://app.circleci.com/pipelines/github/pytorch/pytorch/201040/workflows/05547b7e-f7c7-447e-b6cf-0158d15bc6e3/jobs/6745572
 function prepare_docker_image() {
-    mkdir project
+    git clone https://github.com/pytorch/pytorch project
     cd project
-    git clone https://github.com/pytorch/pytorch .
     git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 # patchs regularly get broken
 
     docker_tag=$(git rev-parse HEAD:.circleci/docker)
@@ -235,27 +233,8 @@ EOF
 }
 
 function build() {
-    export CI=true \
-           CIRCLECI=true
-
-    # Reusing source code cloned in previous "CircleCI Job"
-
-    # See pytorch_params section of CircleCI config
-    export BUILD_ENVIRONMENT="pytorch-linux-bionic-py3.6-verificarlo-build"
-    export DOCKER_IMAGE="fuzzy-pytorch-buildenv"
-    export USE_CUDA_RUNTIME=""
-    export BUILD_ONLY=""
-
-    # Attempting to replace the script setup_ci_environment.sh by:
-    cat << EOF > env
-IN_CIRCLECI=1
-BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo-build
-MAX_JOBS=$(($(nproc) - 1))
-EOF
-
-
-    echo "Launching the build docker container (${DOCKER_IMAGE}):"
-    export id=$(docker run -t -d -w /var/lib/jenkins ${DOCKER_IMAGE})
+    echo "Launching the build docker container:"
+    export id=$(docker run -t -d -w /var/lib/jenkins fuzzy-pytorch-buildenv)
     git submodule sync && git submodule update -q --init --recursive
 
     # Customizations:
@@ -263,16 +242,23 @@ EOF
     setup_function_instrumentation $id
     disable_blas
 
+    # Move PyTorch code inside docker container
     docker cp . $id:/var/lib/jenkins/workspace
 
-    export COMMAND='((echo "export BUILD_ENVIRONMENT=${BUILD_ENVIRONMENT}" && echo "set -a && source ./workspace/env && set +a" && echo "sudo chown -R jenkins workspace && cd workspace && .jenkins/pytorch/build.sh && find ${BUILD_ROOT} -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete") | docker exec -u jenkins -i "$id" bash) 2>&1'
-
-    echo ${COMMAND} > ./command.sh && unbuffer bash ./command.sh | ts
+    # Build Fuzzy PyTorch inside docker
+    cat << EOF | docker exec -u jenkins -i "$id" bash
+export IN_CIRCLECI=1 \
+       BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo-build \
+       MAX_JOBS=$(($(nproc) - 1))
+sudo chown -R jenkins workspace
+cd workspace
+.jenkins/pytorch/build.sh
+find . -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete
+EOF
 
     # Commit built Docker image
-    COMMIT_DOCKER_IMAGE=${DOCKER_IMAGE}-built
-    docker commit "$id" ${COMMIT_DOCKER_IMAGE}
-    push_final_docker_image ${COMMIT_DOCKER_IMAGE}
+    docker commit "$id" "fuzzy-pytorch-built"
+    push_final_docker_image "fuzzy-pytorch-built"
 }
 
 function push_final_docker_image() {
