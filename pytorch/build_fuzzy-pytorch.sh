@@ -29,8 +29,8 @@ function prepare_machine() {
 # Build Docker image
 # See: https://app.circleci.com/pipelines/github/pytorch/pytorch/201040/workflows/05547b7e-f7c7-447e-b6cf-0158d15bc6e3/jobs/6745572
 function prepare_docker_image() {
-    mkdir -p /home/$USER/project
-    cd /home/$USER/project
+    mkdir project
+    cd project
     git clone https://github.com/pytorch/pytorch .
     git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 # patchs regularly get broken
 
@@ -230,7 +230,7 @@ function build() {
     export BUILD_ONLY=""
 
     # Attempting to replace the script setup_ci_environment.sh by:
-    cat << EOF > /home/$USER/project/env
+    cat << EOF > env
 IN_CIRCLECI=1
 BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo-build
 MAX_JOBS=$(($(nproc) - 1))
@@ -246,7 +246,7 @@ EOF
     setup_function_instrumentation $id
     disable_blas
 
-    docker cp /home/$USER/project/. $id:/var/lib/jenkins/workspace
+    docker cp . $id:/var/lib/jenkins/workspace
 
     export COMMAND='((echo "export BUILD_ENVIRONMENT=${BUILD_ENVIRONMENT}" && echo "set -a && source ./workspace/env && set +a" && echo "sudo chown -R jenkins workspace && cd workspace && .jenkins/pytorch/build.sh && find ${BUILD_ROOT} -type f -name "*.a" -or -name "*.o" -or -name "*.ll" -delete") | docker exec -u jenkins -i "$id" bash) 2>&1'
 
