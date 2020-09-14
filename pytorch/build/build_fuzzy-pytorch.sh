@@ -41,19 +41,7 @@ function prepare_docker_image() {
     set -e
     if [ "$docker_pull_ret" -ne "0" ] ; then
 
-        docker build \
-            --no-cache \
-            --progress=plain \
-            --build-arg PROTOBUF=yes \
-            --build-arg LLVMDEV=yes \
-            --build-arg DB=yes \
-            --build-arg VISION=yes \
-            --build-arg UBUNTU_VERSION=18.04 \
-            --build-arg CLANG_VERSION=9 \
-            --build-arg VERIFICARLO_VERSION=github \
-            --build-arg ANACONDA_PYTHON_VERSION=3.6 \
-            -t fuzzy-pytorch-buildenv \
-            $buildenv_path
+        docker build -t fuzzy-pytorch-buildenv $buildenv_path
         docker tag fuzzy-pytorch-buildenv hantoine/fuzzy-pytorch-buildenv:$docker_tag
         docker push hantoine/fuzzy-pytorch-buildenv:$docker_tag
     else
