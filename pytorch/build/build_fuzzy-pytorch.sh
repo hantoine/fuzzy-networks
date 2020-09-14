@@ -30,117 +30,39 @@ function prepare_machine() {
 # Build Docker image
 # See: https://app.circleci.com/pipelines/github/pytorch/pytorch/201040/workflows/05547b7e-f7c7-447e-b6cf-0158d15bc6e3/jobs/6745572
 function prepare_docker_image() {
-    git clone https://github.com/pytorch/pytorch project
-    cd project
-    git checkout 490d41aaa61a9c0b12637e40cec066bf0e9515f3 # patchs regularly get broken
+    git clone https://github.com/hantoine/fuzzy-networks
+    cd fuzzy-networks
+    buildenv_path="pytorch/build/buildenv"
+    docker_tag=$(git rev-parse HEAD:$buildenv_path)
 
-    docker_tag=$(git rev-parse HEAD:.circleci/docker)
     set +e
     docker pull hantoine/fuzzy-pytorch-buildenv:$docker_tag
     docker_pull_ret=$?
     set -e
     if [ "$docker_pull_ret" -ne "0" ] ; then
 
-        # Add verificarlo to docker image
-        patch_docker_build_scripts
-
         docker build \
             --no-cache \
             --progress=plain \
-            --build-arg TRAVIS_DL_URL_PREFIX=https://s3.amazonaws.com/travis-python-archives/binaries/ubuntu/14.04/x86_64 \
-            --build-arg BUILD_ENVIRONMENT=pytorch-linux-bionic-py3.6-verificarlo \
             --build-arg PROTOBUF=yes \
-            --build-arg THRIFT= \
             --build-arg LLVMDEV=yes \
             --build-arg DB=yes \
             --build-arg VISION=yes \
-            --build-arg EC2= \
-            --build-arg JENKINS= \
-            --build-arg JENKINS_UID= \
-            --build-arg JENKINS_GID= \
             --build-arg UBUNTU_VERSION=18.04 \
-            --build-arg CENTOS_VERSION= \
-            --build-arg DEVTOOLSET_VERSION= \
-            --build-arg GLIBC_VERSION= \
             --build-arg CLANG_VERSION=9 \
             --build-arg VERIFICARLO_VERSION=github \
             --build-arg ANACONDA_PYTHON_VERSION=3.6 \
-            --build-arg TRAVIS_PYTHON_VERSION= \
-            --build-arg GCC_VERSION= \
-            --build-arg CUDA_VERSION= \
-            --build-arg CUDNN_VERSION= \
-            --build-arg ANDROID= \
-            --build-arg ANDROID_NDK= \
-            --build-arg GRADLE_VERSION= \
-            --build-arg VULKAN_SDK_VERSION= \
-            --build-arg SWIFTSHADER= \
-            --build-arg CMAKE_VERSION= \
-            --build-arg NINJA_VERSION= \
-            --build-arg KATEX= \
-            --build-arg ROCM_VERSION= \
-            -f .circleci/docker/ubuntu/Dockerfile \
             -t fuzzy-pytorch-buildenv \
-            .circleci/docker
+            $buildenv_path
         docker tag fuzzy-pytorch-buildenv hantoine/fuzzy-pytorch-buildenv:$docker_tag
         docker push hantoine/fuzzy-pytorch-buildenv:$docker_tag
     else
         docker tag hantoine/fuzzy-pytorch-buildenv:$docker_tag fuzzy-pytorch-buildenv
     fi
     cd ..
-}
-
-function patch_docker_build_scripts() {
-cat << 'EOF' | git apply
-diff --git a/.circleci/docker/common/install_verificarlo.sh b/.circleci/docker/common/install_verificarlo.sh
-new file mode 100755
-index 0000000..afd1342
---- /dev/null
-+++ b/.circleci/docker/common/install_verificarlo.sh
-@@ -0,0 +1,24 @@
-+#!/bin/bash
-+
-+set -ex
-+
-+if [ -n "$VERIFICARLO_VERSION" ]; then
-+  sudo apt-get update
-+  sudo apt-get install -y --no-install-recommends libmpfr-dev libtool
-+  pip install bigfloat
-+
-+  git clone https://github.com/verificarlo/verificarlo
-+  cd verificarlo
-+  git checkout 09b24e04797dcf849ca1080d8d06e6d89a14dc65
-+  export PATH="$PATH:/usr/lib/llvm-9/bin/"
-+  ./autogen.sh
-+  ./configure --without-flang CC=gcc-7 CXX=g++-7
-+  make
-+  sudo make install
-+  cd ..
-+  rm -rf verificarlo
-+
-+  # Cleanup package manager
-+  apt-get autoclean && apt-get clean
-+  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-+fi
-diff --git a/.circleci/docker/ubuntu/Dockerfile b/.circleci/docker/ubuntu/Dockerfile
-index 61d426f..a0dcc79 100644
---- a/.circleci/docker/ubuntu/Dockerfile
-+++ b/.circleci/docker/ubuntu/Dockerfile
-@@ -17,6 +17,11 @@ ARG CLANG_VERSION
- ADD ./common/install_travis_python.sh install_travis_python.sh
- RUN bash ./install_travis_python.sh && rm install_travis_python.sh
-
-+# Install Verificarlo
-+ARG VERIFICARLO_VERSION
-+ADD ./common/install_verificarlo.sh install_verificarlo.sh
-+RUN bash ./install_verificarlo.sh && rm install_verificarlo.sh
-+
- # (optional) Install protobuf for ONNX
- ARG PROTOBUF
- ADD ./common/install_protobuf.sh install_protobuf.sh
---
-2.7.4
-
-EOF
+    echo "====================================="
+    echo "  Docker image buildenv built"
+    echo "====================================="
 }
 
 function extract_build_script_patch() {
